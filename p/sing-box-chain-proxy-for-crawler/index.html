@@ -1,0 +1,253 @@
+<!doctype html><html lang=zh-cn dir=ltr><head><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><meta name=description content="互联网大善人这一块"><title>用 sing-box + Cloudflare WARP 搭建链式代理，为爬虫提供稳定 IP</title><link rel=canonical href=https://labs.kmou424.moe/p/sing-box-chain-proxy-for-crawler/><link rel=stylesheet href=/scss/style.min.488c37c98d72872988ed51846594451762efbffb8d914a834259ce0a49ec365c.css><meta property='og:title' content="用 sing-box + Cloudflare WARP 搭建链式代理，为爬虫提供稳定 IP"><meta property='og:description' content="互联网大善人这一块"><meta property='og:url' content='https://labs.kmou424.moe/p/sing-box-chain-proxy-for-crawler/'><meta property='og:site_name' content='SaikaLab'><meta property='og:type' content='article'><meta property='article:section' content='Post'><meta property='article:tag' content='exploration'><meta property='article:tag' content='casual'><meta property='article:tag' content='proxy'><meta property='article:published_time' content='2025-07-14T18:38:22+08:00'><meta property='article:modified_time' content='2025-07-14T18:38:22+08:00'><meta name=twitter:title content="用 sing-box + Cloudflare WARP 搭建链式代理，为爬虫提供稳定 IP"><meta name=twitter:description content="互联网大善人这一块"></head><body class=article-page><script>(function(){const e="StackColorScheme";localStorage.getItem(e)||localStorage.setItem(e,"auto")})()</script><script>(function(){const t="StackColorScheme",e=localStorage.getItem(t),n=window.matchMedia("(prefers-color-scheme: dark)").matches===!0;e=="dark"||e==="auto"&&n?document.documentElement.dataset.scheme="dark":document.documentElement.dataset.scheme="light"})()</script><div class="container main-container flex on-phone--column extended"><div id=article-toolbar style=position:sticky;top:5px;z-index:1000><a href=/ class=back-home><svg class="icon icon-tabler icon-tabler-chevron-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><polyline points="15 6 9 12 15 18"/></svg>
+<span>返回</span></a></div><aside class="sidebar right-sidebar sticky"><section class="widget archives"><div class=widget-icon><svg class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><line x1="5" y1="9" x2="19" y2="9"/><line x1="5" y1="15" x2="19" y2="15"/><line x1="11" y1="4" x2="7" y2="20"/><line x1="17" y1="4" x2="13" y2="20"/></svg></div><h2 class="widget-title section-title">目录</h2><div class=widget--toc><nav id=TableOfContents><ol><li><ol><li><a href=#安装-cloudflare-warp>安装 Cloudflare WARP</a></li><li><a href=#安装-sing-box>安装 sing-box</a></li><li><a href=#测试>测试</a></li><li><a href=#扩展>扩展</a></li></ol></li></ol></nav></div></section></aside><main class="main full-width"><article class=main-article><header class=article-header><div class=article-details><header class=article-category><a href=/categories/technologies/ style=background-color:#2a9d8f;color:#fff>技术</a></header><div class=article-title-wrapper><h2 class=article-title><a href=/p/sing-box-chain-proxy-for-crawler/>用 sing-box + Cloudflare WARP 搭建链式代理，为爬虫提供稳定 IP</a></h2><h3 class=article-subtitle>互联网大善人这一块</h3></div><footer class=article-time><div><svg class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><path d="M11.795 21H5a2 2 0 01-2-2V7a2 2 0 012-2h12a2 2 0 012 2v4"/><circle cx="18" cy="18" r="4"/><path d="M15 3v4"/><path d="M7 3v4"/><path d="M3 11h16"/><path d="M18 16.496V18l1 1"/></svg>
+<time class=article-time--published>Jul 14, 2025</time></div><div><svg class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
+<time class=article-time--reading>阅读时长: 4 分钟</time></div></footer></div></header><section class=article-content><p>最近有一些爬多媒体网站的需求，自己手上又没有太多机器，IP 池也不够用，突然想到了之前折腾过的 Cloudflare WARP，于是就想着能不能用它来搭建一个链式代理，为爬虫提供稳定的干净 IP。
+当然，在这之前还是得先准备一台国外 VPS。由于国内直连 Cloudflare WARP 丢包和延迟是在有点感人。国外的大水管 VPS 价格也相当便宜，可以考虑省预算买美西的 VPS，或者预算充足的话买香港的 VPS（选择你运营商的国际优化线路，费用也不会太贵）。</p><h3 id=安装-cloudflare-warp><a href=#%e5%ae%89%e8%a3%85-cloudflare-warp class=header-anchor></a>安装 Cloudflare WARP</h3><p>按照<a class=link href=https://pkg.cloudflareclient.com/ target=_blank rel=noopener>官网</a>上的教程添加软件源（这里我用的是 Debian 12），然后安装 Cloudflare WARP 客户端。</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span><span class=lnt>4
+</span><span class=lnt>5
+</span><span class=lnt>6
+</span><span class=lnt>7
+</span><span class=lnt>8
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl><span class=c1># Add cloudflare gpg key</span>
+</span></span><span class=line><span class=cl>curl -fsSL https://pkg.cloudflareclient.com/pubkey.gpg <span class=p>|</span> sudo gpg --yes --dearmor --output /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=c1># Add this repo to your apt repositories</span>
+</span></span><span class=line><span class=cl><span class=nb>echo</span> <span class=s2>&#34;deb [signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ </span><span class=k>$(</span>lsb_release -cs<span class=k>)</span><span class=s2> main&#34;</span> <span class=p>|</span> sudo tee /etc/apt/sources.list.d/cloudflare-client.list
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=c1># Install</span>
+</span></span><span class=line><span class=cl>sudo apt-get update <span class=o>&amp;&amp;</span> sudo apt-get install cloudflare-warp
+</span></span></code></pre></td></tr></table></div></div><p>安装好之后，可以自由选择要不要搞一个 WARP+ license 整个无限流量（约为 1923837100 GB），这里我就不赘述。然后把 warp-cli 模式设置为仅代理。</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span><span class=lnt>4
+</span><span class=lnt>5
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl><span class=c1># 连接 WARP</span>
+</span></span><span class=line><span class=cl>warp-cli connect
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=c1># 设置为仅代理</span>
+</span></span><span class=line><span class=cl>warp-cli set-mode proxy
+</span></span></code></pre></td></tr></table></div></div><p>来用 curl 测试一下 WARP 是否正常工作。</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl>curl -x socks5://127.0.0.1:40000 https://api.ipquery.io
+</span></span></code></pre></td></tr></table></div></div><p>如果返回的是 Cloudflare 的 IP，则说明 WARP 正常工作。</p><h3 id=安装-sing-box><a href=#%e5%ae%89%e8%a3%85-sing-box class=header-anchor></a>安装 sing-box</h3><p>我个人比较习惯把各种服务安装在容器里，所以这里使用 Docker。</p><p><code>docker-compose.yaml</code>:</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-yaml data-lang=yaml><span class=line><span class=cl><span class=nt>services</span><span class=p>:</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>  </span><span class=nt>sing-box</span><span class=p>:</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=nt>image</span><span class=p>:</span><span class=w> </span><span class=l>ghcr.io/sagernet/sing-box</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=nt>container_name</span><span class=p>:</span><span class=w> </span><span class=l>sing-box</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=nt>restart</span><span class=p>:</span><span class=w> </span><span class=l>always</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=c># 使用 host 模式，方便后续暴露代理端口</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=nt>network_mode</span><span class=p>:</span><span class=w> </span><span class=l>host</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=nt>volumes</span><span class=p>:</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>      </span>- <span class=l>./config:/etc/sing-box/</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=nt>command</span><span class=p>:</span><span class=w> </span>-<span class=l>D /var/lib/sing-box -C /etc/sing-box/ run</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>    </span><span class=nt>logging</span><span class=p>:</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>      </span><span class=nt>driver</span><span class=p>:</span><span class=w> </span><span class=l>json-file</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>      </span><span class=nt>options</span><span class=p>:</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>        </span><span class=nt>max-size</span><span class=p>:</span><span class=w> </span><span class=s2>&#34;5m&#34;</span><span class=w>
+</span></span></span><span class=line><span class=cl><span class=w>        </span><span class=nt>max-file</span><span class=p>:</span><span class=w> </span><span class=s2>&#34;3&#34;</span><span class=w>
+</span></span></span></code></pre></td></tr></table></div></div><p>创建一个 <code>config</code> 目录，用来存放配置文件。</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl>mkdir -p config
+</span></span></code></pre></td></tr></table></div></div><p>然后创建一个 <code>outbound.json</code> 文件，用来定义出口。WARP 官方客户端默认的代理端口是 socks5 协议的 40000 端口。</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl>vim config/outbound.json
+</span></span></code></pre></td></tr></table></div></div><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-json data-lang=json><span class=line><span class=cl><span class=p>{</span>
+</span></span><span class=line><span class=cl>  <span class=nt>&#34;outbounds&#34;</span><span class=p>:</span> <span class=p>[</span>
+</span></span><span class=line><span class=cl>    <span class=p>{</span>
+</span></span><span class=line><span class=cl>      <span class=nt>&#34;type&#34;</span><span class=p>:</span> <span class=s2>&#34;socks&#34;</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>      <span class=nt>&#34;tag&#34;</span><span class=p>:</span> <span class=s2>&#34;socks5_warp_out&#34;</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>      <span class=nt>&#34;server&#34;</span><span class=p>:</span> <span class=s2>&#34;127.0.0.1&#34;</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>      <span class=nt>&#34;server_port&#34;</span><span class=p>:</span> <span class=mi>40000</span>
+</span></span><span class=line><span class=cl>    <span class=p>}</span>
+</span></span><span class=line><span class=cl>  <span class=p>]</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span></code></pre></td></tr></table></div></div><p>创建一个 <code>inbound.json</code> 文件，用来定义代理入口。这里我使用 socks5 协议，并最好设置用户名密码保证安全。（有动手能力的可以看看文档换一个更安全的协议，这里不多说）</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl>vim config/inbound.json
+</span></span></code></pre></td></tr></table></div></div><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-json data-lang=json><span class=line><span class=cl><span class=p>{</span>
+</span></span><span class=line><span class=cl>  <span class=nt>&#34;inbounds&#34;</span><span class=p>:</span> <span class=p>[</span>
+</span></span><span class=line><span class=cl>    <span class=p>{</span>
+</span></span><span class=line><span class=cl>      <span class=nt>&#34;type&#34;</span><span class=p>:</span> <span class=s2>&#34;socks&#34;</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>      <span class=nt>&#34;listen&#34;</span><span class=p>:</span> <span class=s2>&#34;::&#34;</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>      <span class=nt>&#34;listen_port&#34;</span><span class=p>:</span> <span class=mi>21080</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>      <span class=nt>&#34;tag&#34;</span><span class=p>:</span> <span class=s2>&#34;socks5_warp_in&#34;</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>      <span class=nt>&#34;users&#34;</span><span class=p>:</span> <span class=p>[</span>
+</span></span><span class=line><span class=cl>        <span class=p>{</span>
+</span></span><span class=line><span class=cl>          <span class=nt>&#34;username&#34;</span><span class=p>:</span> <span class=s2>&#34;&lt;username&gt;&#34;</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>          <span class=nt>&#34;password&#34;</span><span class=p>:</span> <span class=s2>&#34;&lt;password&gt;&#34;</span>
+</span></span><span class=line><span class=cl>        <span class=p>}</span>
+</span></span><span class=line><span class=cl>      <span class=p>]</span>
+</span></span><span class=line><span class=cl>    <span class=p>}</span>
+</span></span><span class=line><span class=cl>  <span class=p>]</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span></code></pre></td></tr></table></div></div><p>最后我们需要定义入口流量如何走到出口的规则，也就是路由（routing）。这里我直接把所有流量都路由到 WARP 出口了。</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl>vim config/routing.json
+</span></span></code></pre></td></tr></table></div></div><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-json data-lang=json><span class=line><span class=cl><span class=p>{</span>
+</span></span><span class=line><span class=cl>  <span class=nt>&#34;route&#34;</span><span class=p>:</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>    <span class=nt>&#34;rules&#34;</span><span class=p>:</span> <span class=p>[</span>
+</span></span><span class=line><span class=cl>      <span class=p>{</span>
+</span></span><span class=line><span class=cl>        <span class=nt>&#34;inbound&#34;</span><span class=p>:</span> <span class=s2>&#34;socks5_warp_in&#34;</span><span class=p>,</span> <span class=c1>// 这里填 inbound 的 tag
+</span></span></span><span class=line><span class=cl><span class=c1></span>        <span class=nt>&#34;action&#34;</span><span class=p>:</span> <span class=s2>&#34;route&#34;</span><span class=p>,</span> <span class=c1>// 这里填 route，表示路由
+</span></span></span><span class=line><span class=cl><span class=c1></span>        <span class=nt>&#34;outbound&#34;</span><span class=p>:</span> <span class=s2>&#34;socks5_warp_out&#34;</span> <span class=c1>// 这里填 outbound 的 tag
+</span></span></span><span class=line><span class=cl><span class=c1></span>      <span class=p>}</span>
+</span></span><span class=line><span class=cl>    <span class=p>]</span>
+</span></span><span class=line><span class=cl>  <span class=p>}</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span></code></pre></td></tr></table></div></div><p>这时所有配置都已经写好了，我们可以启动 sing-box 了。</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl>docker compose up -d
+</span></span></code></pre></td></tr></table></div></div><p>启动成功后，我们可以看一下 sing-box 的日志，确保没有报错。</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl>docker logs -f sing-box
+</span></span></code></pre></td></tr></table></div></div><p>如果日志中没有报错，则说明 sing-box 正常工作。</p><h3 id=测试><a href=#%e6%b5%8b%e8%af%95 class=header-anchor></a>测试</h3><p>用 curl 测试一下代理是否正常工作。</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl>curl -x socks5://127.0.0.1:21080 https://api.ipquery.io
+</span></span></code></pre></td></tr></table></div></div><p>如果返回的是与之前相同的 IP，则说明代理正常工作。</p><p>再到本地测试一下代理是否正常工作。</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl>curl -x socks5://&lt;username&gt;:&lt;password&gt;@&lt;你的 VPS 的 IP&gt;:21080 https://api.ipquery.io
+</span></span></code></pre></td></tr></table></div></div><p>如果 IP 与上面相同，就可以使用了。</p><h3 id=扩展><a href=#%e6%89%a9%e5%b1%95 class=header-anchor></a>扩展</h3><p>细心的你可能会发现，某些软件是不支持 socks5 带用户名密码验证的，比如浏览器。更有甚者不支持 socks5 协议，如果能配置成 http 协议，基本就能通杀所有软件了。当然我们此处依然可以用 sing-box 来实现。用一串链式代理，把本地的 http 协议转换成远端的 socks5 协议，再通过 WARP 代理出去。</p><p>本地有两种配置方法:</p><ul><li>如果你是 Windows 系统，推荐你下载 sing-box 二进制文件，然后用 nssm 服务化。</li><li>如果你是 macOS/Linux 系统，那我的推荐还是 Docker 容器化。</li></ul><p>笔者两种都有用到。在这里简述一下 Windows 系统的配置方法。</p><p>首先前往 <a class=link href=https://github.com/SagerNet/sing-box/releases target=_blank rel=noopener>releases</a> 页面，下载 sing-box 二进制文件。解压得到 <code>sing-box.exe</code> 文件。</p><p>然后前往 <a class=link href=https://nssm.cc/download target=_blank rel=noopener>nssm</a> 页面，下载 nssm 二进制文件。解压出 <code>win64/nssm.exe</code> 文件就可以了。</p><blockquote><p>建议把命令行软件都整理到一起方便使用，笔者自己的习惯是放在数据盘的 <code>soft/bin</code> 目录下。</p></blockquote><p>准备一个目录，用来存放 sing-box 的配置文件。</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-powershell data-lang=powershell><span class=line><span class=cl><span class=nb>New-Item</span> <span class=n>-Path</span> <span class=s2>&#34;C:\Users\&lt;你的用户名&gt;&#34;</span> <span class=n>-Name</span> <span class=s2>&#34;.sing-box&#34;</span> <span class=n>-ItemType</span> <span class=n>Directory</span>
+</span></span></code></pre></td></tr></table></div></div><p>在 <code>nssm.exe</code> 所在目录打开 PowerShell，输入以下命令，创建一个服务。</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl>nssm install sing-box
+</span></span></code></pre></td></tr></table></div></div><p>把启动目录设置为 <code>sing-box.exe</code> 所在目录，启动命令设置为 <code>&lt;sing-box.exe 的绝对路径> -C &lt;sing-box 配置文件路径></code>。如果有看日志的需求的话，建议把 stdout 和 stderr 都设置为 <code>C:\Users\&lt;你的用户名>\.sing-box\sing-box.log</code>。</p><p>最后点击 <code>Install Service</code> 完成创建。</p><p>接着就可以开始准备 sing-box 的配置文件了。</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-powershell data-lang=powershell><span class=line><span class=cl><span class=nb>New-Item</span> <span class=n>-Path</span> <span class=s2>&#34;C:\Users\&lt;你的用户名&gt;\.sing-box&#34;</span> <span class=n>-Name</span> <span class=s2>&#34;config.json&#34;</span> <span class=n>-ItemType</span> <span class=n>File</span>
+</span></span></code></pre></td></tr></table></div></div><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span><span class=lnt>17
+</span><span class=lnt>18
+</span><span class=lnt>19
+</span><span class=lnt>20
+</span><span class=lnt>21
+</span><span class=lnt>22
+</span><span class=lnt>23
+</span><span class=lnt>24
+</span><span class=lnt>25
+</span><span class=lnt>26
+</span><span class=lnt>27
+</span><span class=lnt>28
+</span><span class=lnt>29
+</span><span class=lnt>30
+</span><span class=lnt>31
+</span><span class=lnt>32
+</span><span class=lnt>33
+</span><span class=lnt>34
+</span><span class=lnt>35
+</span><span class=lnt>36
+</span><span class=lnt>37
+</span><span class=lnt>38
+</span><span class=lnt>39
+</span><span class=lnt>40
+</span><span class=lnt>41
+</span><span class=lnt>42
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-json data-lang=json><span class=line><span class=cl><span class=p>{</span>
+</span></span><span class=line><span class=cl>  <span class=nt>&#34;inbounds&#34;</span><span class=p>:</span> <span class=p>[</span>
+</span></span><span class=line><span class=cl>    <span class=c1>// 这里可以根据需要添加多个 inbound，比如无密码的 socks5 或者 http 的
+</span></span></span><span class=line><span class=cl><span class=c1></span>    <span class=p>{</span>
+</span></span><span class=line><span class=cl>      <span class=nt>&#34;type&#34;</span><span class=p>:</span> <span class=s2>&#34;http&#34;</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>      <span class=nt>&#34;listen&#34;</span><span class=p>:</span> <span class=s2>&#34;127.0.0.1&#34;</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>      <span class=nt>&#34;listen_port&#34;</span><span class=p>:</span> <span class=mi>21080</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>      <span class=nt>&#34;tag&#34;</span><span class=p>:</span> <span class=s2>&#34;http_in&#34;</span>
+</span></span><span class=line><span class=cl>    <span class=p>},</span>
+</span></span><span class=line><span class=cl>    <span class=p>{</span>
+</span></span><span class=line><span class=cl>      <span class=nt>&#34;type&#34;</span><span class=p>:</span> <span class=s2>&#34;socks&#34;</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>      <span class=nt>&#34;listen&#34;</span><span class=p>:</span> <span class=s2>&#34;127.0.0.1&#34;</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>      <span class=nt>&#34;listen_port&#34;</span><span class=p>:</span> <span class=mi>21081</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>      <span class=nt>&#34;tag&#34;</span><span class=p>:</span> <span class=s2>&#34;socks5_in&#34;</span>
+</span></span><span class=line><span class=cl>    <span class=p>}</span>
+</span></span><span class=line><span class=cl>  <span class=p>],</span>
+</span></span><span class=line><span class=cl>  <span class=nt>&#34;outbounds&#34;</span><span class=p>:</span> <span class=p>[</span>
+</span></span><span class=line><span class=cl>    <span class=p>{</span>
+</span></span><span class=line><span class=cl>      <span class=nt>&#34;type&#34;</span><span class=p>:</span> <span class=s2>&#34;socks&#34;</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>      <span class=nt>&#34;server&#34;</span><span class=p>:</span> <span class=s2>&#34;&lt;你的 VPS 的 IP&gt;&#34;</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>      <span class=nt>&#34;server_port&#34;</span><span class=p>:</span> <span class=mi>21080</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>      <span class=nt>&#34;tag&#34;</span><span class=p>:</span> <span class=s2>&#34;socks5_remote_warp_out&#34;</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>      <span class=nt>&#34;username&#34;</span><span class=p>:</span> <span class=s2>&#34;&lt;username&gt;&#34;</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>      <span class=nt>&#34;password&#34;</span><span class=p>:</span> <span class=s2>&#34;&lt;password&gt;&#34;</span>
+</span></span><span class=line><span class=cl>    <span class=p>}</span>
+</span></span><span class=line><span class=cl>  <span class=p>],</span>
+</span></span><span class=line><span class=cl>  <span class=nt>&#34;route&#34;</span><span class=p>:</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>    <span class=nt>&#34;rules&#34;</span><span class=p>:</span> <span class=p>[</span>
+</span></span><span class=line><span class=cl>      <span class=c1>// 然后把所有入口的流量都路由到远端的 socks5 出口
+</span></span></span><span class=line><span class=cl><span class=c1></span>      <span class=p>{</span>
+</span></span><span class=line><span class=cl>        <span class=nt>&#34;inbound&#34;</span><span class=p>:</span> <span class=s2>&#34;http_in&#34;</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>        <span class=nt>&#34;action&#34;</span><span class=p>:</span> <span class=s2>&#34;route&#34;</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>        <span class=nt>&#34;outbound&#34;</span><span class=p>:</span> <span class=s2>&#34;socks5_remote_warp_out&#34;</span>
+</span></span><span class=line><span class=cl>      <span class=p>},</span>
+</span></span><span class=line><span class=cl>      <span class=p>{</span>
+</span></span><span class=line><span class=cl>        <span class=nt>&#34;inbound&#34;</span><span class=p>:</span> <span class=s2>&#34;socks5_in&#34;</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>        <span class=nt>&#34;action&#34;</span><span class=p>:</span> <span class=s2>&#34;route&#34;</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>        <span class=nt>&#34;outbound&#34;</span><span class=p>:</span> <span class=s2>&#34;socks5_remote_warp_out&#34;</span>
+</span></span><span class=line><span class=cl>      <span class=p>}</span>
+</span></span><span class=line><span class=cl>    <span class=p>]</span>
+</span></span><span class=line><span class=cl>  <span class=err>]</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span></code></pre></td></tr></table></div></div><p>而后进入 Windows 服务管理器，启动 <code>sing-box</code> 服务即可。观察日志，确保没有报错。然后就可以爽用了。实测用来进行爬虫测试，效果还是不错的，也不用担心污染自己的 IP。</p><p>如果想要获得 IP 池，可以把 Cloudflare WARP 配置文件转 wireguard，同时连接多个，使用 sing-box 进行负载均衡。这里就不做展开了，如果以后有需要的话，可以再写一篇。</p></section><footer class=article-footer><section class=article-tags><a href=/tags/exploration/>折腾</a>
+<a href=/tags/casual/>杂谈</a>
+<a href=/tags/proxy/>代理</a></section><section class=article-copyright><svg class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="12" cy="12" r="9"/><path d="M14.5 9a3.5 4 0 100 6"/></svg>
+<span>Licensed under CC BY-NC-SA 4.0</span></section></footer><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css integrity=sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI+WdtXRGWt2kTvGFasHpSy3SV crossorigin=anonymous><script src=https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js integrity=sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG+vnGctmUb0ZY0l8 crossorigin=anonymous defer></script><script src=https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js integrity=sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05 crossorigin=anonymous defer></script><script>window.addEventListener("DOMContentLoaded",()=>{const e=document.querySelector(".main-article");renderMathInElement(e,{delimiters:[{left:"$$",right:"$$",display:!0},{left:"$",right:"$",display:!1},{left:"\\(",right:"\\)",display:!1},{left:"\\[",right:"\\]",display:!0}],ignoredClasses:["gist"]})})</script></article><aside class=related-content--wrapper><h2 class=section-title>相关文章</h2><div class=related-content><div class="flex article-list--tile"><article><a href=/p/cloudflare-r2-image-hosting/><div class=article-details><h2 class=article-title>Cloudflare R2+CDN缓存实现无限配额图床</h2></div></a></article></div></div></aside><script src=//unpkg.com/@waline/client@v2/dist/waline.js></script><link href=//unpkg.com/@waline/client@v2/dist/waline.css rel=stylesheet><div id=waline class=waline-container></div><style>.waline-container{background-color:var(--card-background);border-radius:var(--card-border-radius);box-shadow:var(--shadow-l1);padding:var(--card-padding);--waline-font-size:var(--article-font-size)}.waline-container .wl-count{color:var(--card-text-color-main)}</style><script>Waline.init({avatar:"",dark:'html[data-scheme="dark"]',el:"#waline",emoji:["//unpkg.com/@waline/emojis@1.2.0/bmoji","//unpkg.com/@waline/emojis@1.2.0/bilibili","//unpkg.com/@waline/emojis@1.2.0/tieba"],lang:"zh-CN",locale:{admin:"Admin",placeholder:null},login:"force",meta:["name","email","url"],placeholder:"",requiredMeta:["name","email"],serverURL:"https://waline.kmou424.moe/"})</script><footer class=site-footer><section class=copyright>&copy;
+2018 -
+2025 <a href=/>SaikaLab</a></section><section class=powerby>使用 <a href=https://gohugo.io/ target=_blank rel=noopener>Hugo</a> 构建<br>主题 <b><a href=https://github.com/CaiJimmy/hugo-theme-stack target=_blank rel=noopener data-version=3.30.0>Stack</a></b> 由 <a href=https://jimmycai.com target=_blank rel=noopener>Jimmy</a> 设计</section></footer><div class=pswp tabindex=-1 role=dialog aria-hidden=true><div class=pswp__bg></div><div class=pswp__scroll-wrap><div class=pswp__container><div class=pswp__item></div><div class=pswp__item></div><div class=pswp__item></div></div><div class="pswp__ui pswp__ui--hidden"><div class=pswp__top-bar><div class=pswp__counter></div><button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+<button class="pswp__button pswp__button--share" title=Share></button>
+<button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+<button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button><div class=pswp__preloader><div class=pswp__preloader__icn><div class=pswp__preloader__cut><div class=pswp__preloader__donut></div></div></div></div></div><div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap"><div class=pswp__share-tooltip></div></div><button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+</button>
+<button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)"></button><div class=pswp__caption><div class=pswp__caption__center></div></div></div></div></div><script src=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo=" crossorigin=anonymous defer></script><script src=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU=" crossorigin=anonymous defer></script><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.min.css crossorigin=anonymous><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.css crossorigin=anonymous></main></div><script src=https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z+KMkF24hUW8WePSA9HM=" crossorigin=anonymous></script><script type=text/javascript src=/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js defer></script><script>(function(){const e=document.createElement("link");e.href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap",e.type="text/css",e.rel="stylesheet",document.head.appendChild(e)})()</script></body></html>
